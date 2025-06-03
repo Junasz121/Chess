@@ -1,1 +1,59 @@
+# Build results
+bin/
+obj/
+[Bb]uild/
+[Bb]uild[Ll]og.*
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio cache files
+.vs/
+.vscode/
+
+# Windows image thumbnails
+Thumbs.db
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+*.userprefs
+
+# Auto-generated files
+*.g.cs
+*.g.i.cs
+*.Designer.cs
+
+# NuGet packages
+*.nupkg
+# The packages folder can be ignored if you're using PackageReference
+packages/
+# Uncomment if you have dependencies you want to check in
+#!packages/repositories.config
+
+# DotCover
+*.dotCover
+
+# NCrunch
+_NCrunch_*
+.*crunch*.local.xml
+
+# Azure Functions local settings
+local.settings.json
+
+# Rider IDE
+.idea/
+
+# JetBrains Rider caches
+.idea/
+*.sln.iml
+
+# Logs
+*.log
+
+# Publish folder
+publish/
 
