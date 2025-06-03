@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -104,7 +104,20 @@ namespace WpfChessApp
             board[7, 0] = new Rook { IsWhite = true };
             board[7, 7] = new Rook { IsWhite = true };
 
-            // Add more pieces as needed
+            board[0, 1] = new Knight { IsWhite = false };
+            board[0, 6] = new Knight { IsWhite = false };
+            board[7, 1] = new Knight { IsWhite = true };
+            board[7, 6] = new Knight { IsWhite = true };
+
+            board[0, 2] = new Bishop { IsWhite = false };
+            board[0, 5] = new Bishop { IsWhite = false };
+            board[7, 2] = new Bishop { IsWhite = true };
+            board[7, 5] = new Bishop { IsWhite = true };
+
+            board[0, 3] = new Queen { IsWhite = false };
+            board[0, 4] = new King { IsWhite = false };
+            board[7, 3] = new Queen { IsWhite = true };
+            board[7, 4] = new King { IsWhite = true };
         }
 
         private void OnSquareClicked(int row, int col)
@@ -155,73 +168,38 @@ namespace WpfChessApp
 
     public class Rook : Piece
     {
-        public override string Symbol => IsWhite ? "♖" : "♜";
+        public override string Symbol => IsWhite ? "1" : "1";
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+    }
 
-        public override List<(int row, int col)> GetValidMoves(int row, int col, Piece[,] board)
-        {
-            var moves = new List<(int, int)>();
-            int[] directions = { -1, 1 };
+    public class Knight : Piece
+    {
+        public override string Symbol => IsWhite ? "2" : "2";
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+    }
 
-            foreach (int d in directions)
-            {
-                for (int r = row + d; r >= 0 && r < 8; r += d)
-                {
-                    if (board[r, col] == null)
-                        moves.Add((r, col));
-                    else
-                    {
-                        if (board[r, col].IsWhite != IsWhite)
-                            moves.Add((r, col));
-                        break;
-                    }
-                }
+    public class Bishop : Piece
+    {
+        public override string Symbol => IsWhite ? "3" : "3";
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+    }
 
-                for (int c = col + d; c >= 0 && c < 8; c += d)
-                {
-                    if (board[row, c] == null)
-                        moves.Add((row, c));
-                    else
-                    {
-                        if (board[row, c].IsWhite != IsWhite)
-                            moves.Add((row, c));
-                        break;
-                    }
-                }
-            }
-            return moves;
-        }
+    public class Queen : Piece
+    {
+        public override string Symbol => IsWhite ? "4" : "4";
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+    }
+
+    public class King : Piece
+    {
+        public override string Symbol => IsWhite ? "5" : "5";
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
     }
 
     public class Pawn : Piece
     {
-        public override string Symbol => IsWhite ? "♙" : "♟";
-
-        public override List<(int row, int col)> GetValidMoves(int row, int col, Piece[,] board)
-        {
-            var moves = new List<(int, int)>();
-            int direction = IsWhite ? -1 : 1;
-            int startRow = IsWhite ? 6 : 1;
-
-            if (InBounds(row + direction) && board[row + direction, col] == null)
-                moves.Add((row + direction, col));
-
-            if (row == startRow && board[row + direction, col] == null && board[row + 2 * direction, col] == null)
-                moves.Add((row + 2 * direction, col));
-
-            foreach (int dc in new[] { -1, 1 })
-            {
-                int newCol = col + dc;
-                if (InBounds(row + direction) && InBounds(newCol))
-                {
-                    var target = board[row + direction, newCol];
-                    if (target != null && target.IsWhite != IsWhite)
-                        moves.Add((row + direction, newCol));
-                }
-            }
-
-            return moves;
-        }
-
-        private bool InBounds(int index) => index >= 0 && index < 8;
+        public override string Symbol => IsWhite ? "6" : "6";
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
     }
 }
+
