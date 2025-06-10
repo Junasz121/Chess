@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Input;
+using System.Windows.Shapes;
 
 namespace WpfChessApp
 {
@@ -11,6 +12,7 @@ namespace WpfChessApp
     {
         private Piece[,] board = new Piece[8, 8];
         private Border[,] uiSquares = new Border[8, 8];
+        private Ellipse[,] moveDots = new Ellipse[8, 8];
         private (int row, int col)? selectedPiece = null;
 
         public MainWindow()
@@ -38,24 +40,37 @@ namespace WpfChessApp
                 {
                     if (row >= 1 && row <= 8 && col >= 1 && col <= 8)
                     {
+                        Grid squareContent = new Grid();
                         TextBlock pieceText = new TextBlock
                         {
                             FontSize = 32,
                             HorizontalAlignment = HorizontalAlignment.Center,
                             VerticalAlignment = VerticalAlignment.Center
                         };
+                        Ellipse dot = new Ellipse
+                        {
+                            Width = 10,
+                            Height = 10,
+                            Fill = Brushes.Black,
+                            Visibility = Visibility.Hidden,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        squareContent.Children.Add(pieceText);
+                        squareContent.Children.Add(dot);
 
                         Border square = new Border
                         {
                             Background = (row + col) % 2 == 0 ? lightBrown : darkBrown,
                             BorderBrush = Brushes.Black,
                             BorderThickness = new Thickness(0.5),
-                            Child = pieceText
+                            Child = squareContent
                         };
 
                         int r = row - 1;
                         int c = col - 1;
                         uiSquares[r, c] = square;
+                        moveDots[r, c] = dot;
                         square.MouseLeftButtonDown += (s, e) => OnSquareClicked(r, c);
 
                         Grid.SetRow(square, row);
@@ -122,11 +137,14 @@ namespace WpfChessApp
 
         private void OnSquareClicked(int row, int col)
         {
+            ClearMoveDots();
+
             if (selectedPiece == null)
             {
                 if (board[row, col] != null)
                 {
                     selectedPiece = (row, col);
+                    ShowValidMoves(board[row, col].GetValidMoves(row, col, board));
                 }
             }
             else
@@ -151,10 +169,28 @@ namespace WpfChessApp
             {
                 for (int col = 0; col < 8; col++)
                 {
-                    var piece = board[row, col];
-                    var textBlock = uiSquares[row, col].Child as TextBlock;
-                    textBlock.Text = piece?.Symbol ?? "";
+                    var squareContent = uiSquares[row, col].Child as Grid;
+                    var textBlock = squareContent.Children[0] as TextBlock;
+                    var dot = squareContent.Children[1] as Ellipse;
+
+                    textBlock.Text = board[row, col]?.Symbol ?? "";
+                    dot.Visibility = Visibility.Hidden;
                 }
+            }
+        }
+
+        private void ClearMoveDots()
+        {
+            for (int row = 0; row < 8; row++)
+                for (int col = 0; col < 8; col++)
+                    moveDots[row, col].Visibility = Visibility.Hidden;
+        }
+
+        private void ShowValidMoves(List<(int row, int col)> moves)
+        {
+            foreach (var (row, col) in moves)
+            {
+                moveDots[row, col].Visibility = Visibility.Visible;
             }
         }
     }
@@ -169,37 +205,155 @@ namespace WpfChessApp
     public class Rook : Piece
     {
         public override string Symbol => IsWhite ? "1" : "1";
-        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
+        {
+            var moves = new List<(int, int)>();
+            int[] directions = { -1, 1 };
+
+            foreach (var dir in directions)
+            {
+                for (int i = row + dir; i >= 0 && i < 8; i += dir)
+                {
+                    if (board[i, col] == null || board[i, col].IsWhite != IsWhite)
+                    {
+                        moves.Add((i, col));
+                        if (board[i, col] != null) break;
+                    }
+                    else break;
+                }
+
+                for (int j = col + dir; j >= 0 && j < 8; j += dir)
+                {
+                    if (board[row, j] == null || board[row, j].IsWhite != IsWhite)
+                    {
+                        moves.Add((row, j));
+                        if (board[row, j] != null) break;
+                    }
+                    else break;
+                }
+            }
+
+            return moves;
+        }
     }
 
     public class Knight : Piece
     {
         public override string Symbol => IsWhite ? "2" : "2";
-        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
+        {
+            var moves = new List<(int, int)>();
+            int[,] offsets = { { -2, -1 }, { -2, 1 }, { -1, -2 }, { -1, 2 }, { 1, -2 }, { 1, 2 }, { 2, -1 }, { 2, 1 } };
+
+            for (int i = 0; i < offsets.GetLength(0); i++)
+            {
+                int r = row + offsets[i, 0];
+                int c = col + offsets[i, 1];
+                if (r >= 0 && r < 8 && c >= 0 && c < 8 && (board[r, c] == null || board[r, c].IsWhite != IsWhite))
+                {
+                    moves.Add((r, c));
+                }
+            }
+            return moves;
+        }
     }
 
     public class Bishop : Piece
     {
         public override string Symbol => IsWhite ? "3" : "3";
-        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
+        {
+            var moves = new List<(int, int)>();
+            int[] directions = { -1, 1 };
+
+            foreach (var dr in directions)
+            {
+                foreach (var dc in directions)
+                {
+                    int r = row + dr;
+                    int c = col + dc;
+                    while (r >= 0 && r < 8 && c >= 0 && c < 8)
+                    {
+                        if (board[r, c] == null || board[r, c].IsWhite != IsWhite)
+                        {
+                            moves.Add((r, c));
+                            if (board[r, c] != null) break;
+                        }
+                        else break;
+                        r += dr;
+                        c += dc;
+                    }
+                }
+            }
+            return moves;
+        }
     }
 
     public class Queen : Piece
     {
         public override string Symbol => IsWhite ? "4" : "4";
-        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
+        {
+            var rookMoves = new Rook { IsWhite = this.IsWhite }.GetValidMoves(row, col, board);
+            var bishopMoves = new Bishop { IsWhite = this.IsWhite }.GetValidMoves(row, col, board);
+            rookMoves.AddRange(bishopMoves);
+            return rookMoves;
+        }
     }
 
     public class King : Piece
     {
         public override string Symbol => IsWhite ? "5" : "5";
-        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
+        {
+            var moves = new List<(int, int)>();
+            for (int dr = -1; dr <= 1; dr++)
+            {
+                for (int dc = -1; dc <= 1; dc++)
+                {
+                    if (dr == 0 && dc == 0) continue;
+                    int r = row + dr;
+                    int c = col + dc;
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8 && (board[r, c] == null || board[r, c].IsWhite != IsWhite))
+                    {
+                        moves.Add((r, c));
+                    }
+                }
+            }
+            return moves;
+        }
     }
 
     public class Pawn : Piece
     {
         public override string Symbol => IsWhite ? "6" : "6";
-        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board) => new();
+        public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
+        {
+            var moves = new List<(int, int)>();
+            int direction = IsWhite ? -1 : 1;
+            int startRow = IsWhite ? 6 : 1;
+
+            if (IsInsideBoard(row + direction, col) && board[row + direction, col] == null)
+            {
+                moves.Add((row + direction, col));
+                if (row == startRow && board[row + 2 * direction, col] == null)
+                {
+                    moves.Add((row + 2 * direction, col));
+                }
+            }
+
+            for (int dc = -1; dc <= 1; dc += 2)
+            {
+                int newCol = col + dc;
+                if (IsInsideBoard(row + direction, newCol) && board[row + direction, newCol] != null && board[row + direction, newCol].IsWhite != IsWhite)
+                {
+                    moves.Add((row + direction, newCol));
+                }
+            }
+
+            return moves;
+        }
+
+        private bool IsInsideBoard(int r, int c) => r >= 0 && r < 8 && c >= 0 && c < 8;
     }
 }
-
