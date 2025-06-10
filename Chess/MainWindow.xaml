@@ -1,4 +1,4 @@
-﻿<Window x:Class="WpfChessApp.MainWindow"
+<Window x:Class="WpfChessApp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Chess Board" Height="640" Width="640">
