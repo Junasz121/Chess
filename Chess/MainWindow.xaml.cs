@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -14,6 +15,8 @@ namespace WpfChessApp
         private Border[,] uiSquares = new Border[8, 8];
         private Ellipse[,] moveDots = new Ellipse[8, 8];
         private (int row, int col)? selectedPiece = null;
+        private bool isWhiteTurn = true;
+        private bool gameOver = false;
 
         public MainWindow()
         {
@@ -49,8 +52,8 @@ namespace WpfChessApp
                         };
                         Ellipse dot = new Ellipse
                         {
-                            Width = 10,
-                            Height = 10,
+                            Width = 12,
+                            Height = 12,
                             Fill = Brushes.Black,
                             Visibility = Visibility.Hidden,
                             HorizontalAlignment = HorizontalAlignment.Center,
@@ -108,27 +111,32 @@ namespace WpfChessApp
 
         private void InitializeBoardModel()
         {
+            // Pawns
             for (int i = 0; i < 8; i++)
             {
                 board[1, i] = new Pawn { IsWhite = false };
                 board[6, i] = new Pawn { IsWhite = true };
             }
 
+            // Rooks
             board[0, 0] = new Rook { IsWhite = false };
             board[0, 7] = new Rook { IsWhite = false };
             board[7, 0] = new Rook { IsWhite = true };
             board[7, 7] = new Rook { IsWhite = true };
 
+            // Knights
             board[0, 1] = new Knight { IsWhite = false };
             board[0, 6] = new Knight { IsWhite = false };
             board[7, 1] = new Knight { IsWhite = true };
             board[7, 6] = new Knight { IsWhite = true };
 
+            // Bishops
             board[0, 2] = new Bishop { IsWhite = false };
             board[0, 5] = new Bishop { IsWhite = false };
             board[7, 2] = new Bishop { IsWhite = true };
             board[7, 5] = new Bishop { IsWhite = true };
 
+            // Queens and Kings
             board[0, 3] = new Queen { IsWhite = false };
             board[0, 4] = new King { IsWhite = false };
             board[7, 3] = new Queen { IsWhite = true };
@@ -137,29 +145,47 @@ namespace WpfChessApp
 
         private void OnSquareClicked(int row, int col)
         {
+            if (gameOver) return;
+
             ClearMoveDots();
 
             if (selectedPiece == null)
             {
-                if (board[row, col] != null)
+                // selecting a piece
+                if (board[row, col] != null && board[row, col].IsWhite == isWhiteTurn)
                 {
                     selectedPiece = (row, col);
-                    ShowValidMoves(board[row, col].GetValidMoves(row, col, board));
+                    var piece = board[row, col];
+                    var moves = GetLegalMoves(piece, row, col);
+                    ShowValidMoves(moves);
                 }
             }
             else
             {
                 var (srcRow, srcCol) = selectedPiece.Value;
                 var piece = board[srcRow, srcCol];
-                var validMoves = piece.GetValidMoves(srcRow, srcCol, board);
+                if (piece == null) { selectedPiece = null; return; }
+
+                var validMoves = GetLegalMoves(piece, srcRow, srcCol);
 
                 if (validMoves.Contains((row, col)))
                 {
+                    // perform move
+                    var captured = board[row, col];
                     board[row, col] = piece;
                     board[srcRow, srcCol] = null;
+
+                    // switch turn
+                    isWhiteTurn = !isWhiteTurn;
+
+                    // update UI
+                    RenderBoard();
+
+                    // check for mate/pat
+                    CheckForEndGame();
                 }
+
                 selectedPiece = null;
-                RenderBoard();
             }
         }
 
@@ -170,14 +196,30 @@ namespace WpfChessApp
                 for (int col = 0; col < 8; col++)
                 {
                     var squareContent = uiSquares[row, col].Child as Grid;
-                    var textBlock = squareContent.Children[0] as TextBlock;
-                    var dot = squareContent.Children[1] as Ellipse;
+                    squareContent.Children.Clear();
 
-                    textBlock.Text = board[row, col]?.Symbol ?? "";
-                    dot.Visibility = Visibility.Hidden;
+                    // Add piece shape
+                    UIElement pieceShape = GetPieceShape(board[row, col]);
+                    squareContent.Children.Add(pieceShape);
+
+                    // Re-create move dot every time (avoid re-using UIElements)
+                    var dot = new Ellipse
+                    {
+                        Width = 10,
+                        Height = 10,
+                        Fill = Brushes.Black,
+                        Visibility = Visibility.Hidden,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    squareContent.Children.Add(dot);
+
+                    moveDots[row, col] = dot;
                 }
             }
         }
+
+
 
         private void ClearMoveDots()
         {
@@ -193,6 +235,196 @@ namespace WpfChessApp
                 moveDots[row, col].Visibility = Visibility.Visible;
             }
         }
+
+
+        private bool IsKingInCheck(bool isWhite)
+        {
+            // find king
+            (int r, int c)? kingPos = null;
+            for (int i = 0; i < 8; i++)
+                for (int j = 0; j < 8; j++)
+                    if (board[i, j] is King && board[i, j].IsWhite == isWhite)
+                        kingPos = (i, j);
+
+            if (kingPos == null) return false; 
+
+            var (kr, kc) = kingPos.Value;
+
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    var attacker = board[i, j];
+                    if (attacker != null && attacker.IsWhite != isWhite)
+                    {
+                        var attacks = attacker.GetValidMoves(i, j, board);
+                        if (attacks.Contains((kr, kc))) return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private List<(int row, int col)> GetLegalMoves(Piece piece, int srcRow, int srcCol)
+        {
+            var valid = piece.GetValidMoves(srcRow, srcCol, board);
+            var legal = new List<(int, int)>();
+
+            foreach (var (r, c) in valid)
+            {
+
+                var backup = board[r, c];
+                board[r, c] = piece;
+                board[srcRow, srcCol] = null;
+
+                bool kingInCheck = IsKingInCheck(piece.IsWhite);
+
+ 
+                board[srcRow, srcCol] = piece;
+                board[r, c] = backup;
+
+                if (!kingInCheck) legal.Add((r, c));
+            }
+
+            return legal;
+        }
+
+        private bool PlayerHasAnyLegalMove(bool isWhite)
+        {
+            for (int r = 0; r < 8; r++)
+            {
+                for (int c = 0; c < 8; c++)
+                {
+                    var piece = board[r, c];
+                    if (piece != null && piece.IsWhite == isWhite)
+                    {
+                        var legal = GetLegalMoves(piece, r, c);
+                        if (legal.Count > 0) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void CheckForEndGame()
+        {
+            
+            bool playerToMoveIsWhite = isWhiteTurn;
+            bool inCheck = IsKingInCheck(playerToMoveIsWhite);
+            bool hasMove = PlayerHasAnyLegalMove(playerToMoveIsWhite);
+
+            if (!hasMove)
+            {
+                gameOver = true;
+                if (inCheck)
+                {
+                    // checkmate
+                    string winner = playerToMoveIsWhite ? "Black" : "White";
+                    MessageBox.Show($"Checkmate! {winner} wins.", "Game Over", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    // stalemate (pat)
+                    MessageBox.Show("Stalemate! It's a draw.", "Game Over", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+        }
+        private UIElement GetPieceShape(Piece piece)
+        {
+            if (piece == null) return new TextBlock(); // empty square
+
+            Brush color = piece.IsWhite ? Brushes.White : Brushes.Black;
+
+            switch (piece)
+            {
+                case Pawn:
+                    return new Ellipse
+                    {
+                        Width = 20,
+                        Height = 20,
+                        Fill = color,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                case Rook:
+                    return new Rectangle
+                    {
+                        Width = 20,
+                        Height = 20,
+                        Fill = color,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                case Knight:
+                    return new Polygon
+                    {
+                        Points = new PointCollection { new Point(0, 20), new Point(10, 0), new Point(20, 20) },
+                        Fill = color,
+                        Stretch = Stretch.Uniform,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Width = 20,
+                        Height = 20
+                    };
+
+                case Bishop:
+                    return new Ellipse
+                    {
+                        Width = 15,
+                        Height = 25,
+                        Fill = color,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                case Queen:
+                    return new Polygon
+                    {
+                        Points = new PointCollection { new Point(10, 0), new Point(20, 10), new Point(10, 20), new Point(0, 10) },
+                        Fill = color,
+                        Stretch = Stretch.Uniform,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Width = 20,
+                        Height = 20
+                    };
+
+                case King:
+                    var cross = new Grid { Width = 20, Height = 20 };
+                    cross.Children.Add(new Rectangle
+                    {
+                        Width = 6,
+                        Height = 20,
+                        Fill = color,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+                    cross.Children.Add(new Rectangle
+                    {
+                        Width = 20,
+                        Height = 6,
+                        Fill = color,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+                    return cross;
+
+                default:
+                    return new Ellipse
+                    {
+                        Width = 15,
+                        Height = 15,
+                        Fill = color
+                    };
+            }
+        }
+
+
+
+
     }
 
     public abstract class Piece
@@ -204,55 +436,51 @@ namespace WpfChessApp
 
     public class Rook : Piece
     {
-        public override string Symbol => IsWhite ? "1" : "1";
+        public override string Symbol => "1";
         public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
         {
             var moves = new List<(int, int)>();
-            int[] directions = { -1, 1 };
+            int[] dirs = { -1, 1 };
 
-            foreach (var dir in directions)
+            foreach (var d in dirs)
             {
-                for (int i = row + dir; i >= 0 && i < 8; i += dir)
+                for (int r = row + d; r >= 0 && r < 8; r += d)
                 {
-                    if (board[i, col] == null || board[i, col].IsWhite != IsWhite)
+                    if (board[r, col] == null) moves.Add((r, col));
+                    else
                     {
-                        moves.Add((i, col));
-                        if (board[i, col] != null) break;
+                        if (board[r, col].IsWhite != this.IsWhite) moves.Add((r, col));
+                        break;
                     }
-                    else break;
                 }
 
-                for (int j = col + dir; j >= 0 && j < 8; j += dir)
+                for (int c = col + d; c >= 0 && c < 8; c += d)
                 {
-                    if (board[row, j] == null || board[row, j].IsWhite != IsWhite)
+                    if (board[row, c] == null) moves.Add((row, c));
+                    else
                     {
-                        moves.Add((row, j));
-                        if (board[row, j] != null) break;
+                        if (board[row, c].IsWhite != this.IsWhite) moves.Add((row, c));
+                        break;
                     }
-                    else break;
                 }
             }
-
             return moves;
         }
     }
 
     public class Knight : Piece
     {
-        public override string Symbol => IsWhite ? "2" : "2";
+        public override string Symbol => "2";
         public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
         {
             var moves = new List<(int, int)>();
             int[,] offsets = { { -2, -1 }, { -2, 1 }, { -1, -2 }, { -1, 2 }, { 1, -2 }, { 1, 2 }, { 2, -1 }, { 2, 1 } };
-
             for (int i = 0; i < offsets.GetLength(0); i++)
             {
                 int r = row + offsets[i, 0];
                 int c = col + offsets[i, 1];
-                if (r >= 0 && r < 8 && c >= 0 && c < 8 && (board[r, c] == null || board[r, c].IsWhite != IsWhite))
-                {
+                if (r >= 0 && r < 8 && c >= 0 && c < 8 && (board[r, c] == null || board[r, c].IsWhite != this.IsWhite))
                     moves.Add((r, c));
-                }
             }
             return moves;
         }
@@ -260,100 +488,94 @@ namespace WpfChessApp
 
     public class Bishop : Piece
     {
-        public override string Symbol => IsWhite ? "3" : "3";
+        public override string Symbol => "3";
         public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
         {
             var moves = new List<(int, int)>();
-            int[] directions = { -1, 1 };
+            int[] dirs = { -1, 1 };
 
-            foreach (var dr in directions)
-            {
-                foreach (var dc in directions)
+            foreach (var dr in dirs)
+                foreach (var dc in dirs)
                 {
-                    int r = row + dr;
-                    int c = col + dc;
+                    int r = row + dr, c = col + dc;
                     while (r >= 0 && r < 8 && c >= 0 && c < 8)
                     {
-                        if (board[r, c] == null || board[r, c].IsWhite != IsWhite)
+                        if (board[r, c] == null) moves.Add((r, c));
+                        else
                         {
-                            moves.Add((r, c));
-                            if (board[r, c] != null) break;
+                            if (board[r, c].IsWhite != this.IsWhite) moves.Add((r, c));
+                            break;
                         }
-                        else break;
-                        r += dr;
-                        c += dc;
+                        r += dr; c += dc;
                     }
                 }
-            }
             return moves;
         }
     }
 
     public class Queen : Piece
     {
-        public override string Symbol => IsWhite ? "4" : "4";
+        public override string Symbol => "4";
         public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
         {
-            var rookMoves = new Rook { IsWhite = this.IsWhite }.GetValidMoves(row, col, board);
-            var bishopMoves = new Bishop { IsWhite = this.IsWhite }.GetValidMoves(row, col, board);
-            rookMoves.AddRange(bishopMoves);
-            return rookMoves;
+            var rook = new Rook { IsWhite = this.IsWhite };
+            var bishop = new Bishop { IsWhite = this.IsWhite };
+            var moves = new List<(int, int)>();
+            moves.AddRange(rook.GetValidMoves(row, col, board));
+            moves.AddRange(bishop.GetValidMoves(row, col, board));
+            return moves;
         }
     }
 
     public class King : Piece
     {
-        public override string Symbol => IsWhite ? "5" : "5";
+        public override string Symbol => "5";
         public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
         {
             var moves = new List<(int, int)>();
             for (int dr = -1; dr <= 1; dr++)
-            {
                 for (int dc = -1; dc <= 1; dc++)
                 {
                     if (dr == 0 && dc == 0) continue;
-                    int r = row + dr;
-                    int c = col + dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8 && (board[r, c] == null || board[r, c].IsWhite != IsWhite))
-                    {
+                    int r = row + dr, c = col + dc;
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8 && (board[r, c] == null || board[r, c].IsWhite != this.IsWhite))
                         moves.Add((r, c));
-                    }
                 }
-            }
             return moves;
         }
     }
 
     public class Pawn : Piece
     {
-        public override string Symbol => IsWhite ? "6" : "6";
+        public override string Symbol => "6";
         public override List<(int, int)> GetValidMoves(int row, int col, Piece[,] board)
         {
             var moves = new List<(int, int)>();
-            int direction = IsWhite ? -1 : 1;
-            int startRow = IsWhite ? 6 : 1;
+            int dir = this.IsWhite ? -1 : 1;
+            int start = this.IsWhite ? 6 : 1;
 
-            if (IsInsideBoard(row + direction, col) && board[row + direction, col] == null)
+            if (IsInside(row + dir, col) && board[row + dir, col] == null)
             {
-                moves.Add((row + direction, col));
-                if (row == startRow && board[row + 2 * direction, col] == null)
-                {
-                    moves.Add((row + 2 * direction, col));
-                }
+                moves.Add((row + dir, col));
+                if (row == start && board[row + 2 * dir, col] == null) moves.Add((row + 2 * dir, col));
             }
 
-            for (int dc = -1; dc <= 1; dc += 2)
+            foreach (int dc in new[] { -1, 1 })
             {
-                int newCol = col + dc;
-                if (IsInsideBoard(row + direction, newCol) && board[row + direction, newCol] != null && board[row + direction, newCol].IsWhite != IsWhite)
-                {
-                    moves.Add((row + direction, newCol));
-                }
+                int nc = col + dc;
+                if (IsInside(row + dir, nc) && board[row + dir, nc] != null && board[row + dir, nc].IsWhite != this.IsWhite)
+                    moves.Add((row + dir, nc));
             }
 
             return moves;
         }
 
+        private bool IsInside(int r, int c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+    }
+}
+
+
         private bool IsInsideBoard(int r, int c) => r >= 0 && r < 8 && c >= 0 && c < 8;
     }
 }
+
